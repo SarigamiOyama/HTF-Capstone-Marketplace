@@ -1,13 +1,14 @@
 import {
     MediaRenderer,
     ThirdwebNftMedia,
+    useAddress,
     useContract,
     useContractEvents,
     useValidDirectListings,
     useValidEnglishAuctions,
     Web3Button,
   } from "@thirdweb-dev/react";
-  import React, { useState } from "react";
+  
   import Container from "../../../components/Container/Container";
   import { GetStaticProps, GetStaticPaths } from "next";
   import { NFT, ThirdwebSDK } from "@thirdweb-dev/sdk";
@@ -23,17 +24,38 @@ import {
   import Skeleton from "../../../components/Skeleton/Skeleton";
   import toast, { Toaster } from "react-hot-toast";
   import toastStyle from "../../../util/toastConfig";
+  import {Appearance, loadStripe, StripeElementsOptions} from "@stripe/stripe-js";
+  import {Elements} from "@stripe/react-stripe-js";
+  import React, { useState } from 'react';
+  import { Form } from "../../../components/form/Form";
+
+ 
   
+  const stripe = loadStripe (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  
+  const appearance: Appearance = {
+    theme: "night",
+    labels: "above",
+  };
+ 
+  const [randomColor1, randomColor2] = [randomColor(), randomColor()];
+
   type Props = {
     nft: NFT;
     contractMetadata: any;
   };
+ 
   
-  const [randomColor1, randomColor2] = [randomColor(), randomColor()];
   
   export default function TokenPage({ nft, contractMetadata }: Props) {
     const [bidValue, setBidValue] = useState<string>();
-  
+    const address = useAddress(); 
+    const [clientSecret, setClientSecret] = useState<string>("");
+    const options: StripeElementsOptions = {
+      clientSecret,
+      appearance,
+    };
+    
     // Connect to marketplace smart contract
     const { contract: marketplace, isLoading: loadingContract } = useContract(
       MARKETPLACE_ADDRESS,
@@ -66,6 +88,20 @@ import {
           order: "desc",
         },
       });
+
+      const onClick = async () => {
+        const res = await fetch("app/api/stripe_intent/route", {
+          method:"POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            address,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setClientSecret(data.client_secret);
+        }
+      };
   
     async function createBidOrOffer() {
       let txResult;
@@ -114,6 +150,8 @@ import {
       return txResult;
     }
   
+
+
     return (
       <>
         <Toaster position="bottom-center" reverseOrder={false} />
@@ -279,7 +317,9 @@ import {
                   </div>
                 </div>
               </div>
-  
+              <div className={` ${styles.or}`}>
+                    <p className={styles.listingTime}>Fixed Price</p>
+                  </div>
               {loadingContract || loadingDirect || loadingAuction ? (
                 <Skeleton width="100%" height="164" />
               ) : (
@@ -300,16 +340,58 @@ import {
                         icon: "❌",
                         style: toastStyle,
                         position: "bottom-center",
+                        
                       });
+                    
                     }}
                   >
+                   
                     Buy at asking price
+
                   </Web3Button>
-  
+                    
                   <div className={`${styles.listingTimeContainer} ${styles.or}`}>
                     <p className={styles.listingTime}>or</p>
                   </div>
-  
+                 <br/>
+                    <div className={`${styles.fiatContainer} ${styles.or}`}>
+                      <p className={styles.listingTime}> Connect wallet for Card Payment</p>
+                 
+                      <br/>
+                      
+                    {address && (
+                      <>
+                      {clientSecret ? (
+                        <Elements options={options} stripe={stripe}>
+                          <Form />
+                        </Elements>
+                      ) : (
+                        <button
+                        style={{
+                          padding: "1rem",
+                          borderRadius: "10px",
+                          border: "none",
+                          backgroundColor: "white",
+                          color: "#333",
+                          cursor: "pointer",
+                          width: "100%",
+
+                        }}
+                        onClick={onClick}
+                        > Buy with Credit Card</button>
+                      )}
+                      
+                      </>
+
+                    )}
+
+                    </div>
+                    <div className={`${styles.listingTimeContainer} ${styles.or}`}>
+                    <p className={styles.listingTime}>or</p>
+                  </div>
+                  <div className={` ${styles.or}`}>
+                    <p className={styles.listingTime}>Bid</p>
+                  </div>
                   <input
                     className={styles.input}
                     defaultValue={
